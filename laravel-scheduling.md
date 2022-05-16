@@ -1,19 +1,55 @@
 # <a name="scheduling"></a> Laravel Scheduling
 ## Latar belakang topik
 
-Konfigurasi entri cron digunakan untuk menjadwalkan tugas-tugas seperti mengirim email atau mengunduh file dari internet di waktu tertentu. Namun, konfigurasi cron dalam sebuah server terkadang tidak nyaman. Jadwal tugas tidak lagi berada dalam source control. Untuk melihat entri cron yang ada atau menambah entri cron yang baru, perlu dilakukan SSH ke server.
+Cron Job sebelumnya biasa ditemukan pada server yang menggunakan sistem operasi Linux, akan tetapi juga terdapat implementasinya pada framework Laravel. Konfigurasi entri cron sendiri dapat digunakan untuk menjadwalkan tugas-tugas seperti mengirim email atau mengunduh file dari internet di waktu tertentu. Walau begitu, terkadang menulis script yang dijadwalkan di Cron memang agak menyakitkan. Selain sering error, kita pun sulit untuk mengetahui error apa yang muncul apabila ada kesalahan pada saat menjadwalkan script kita. Jadwal tugas tidak lagi berada dalam source control. Untuk melihat entri cron yang ada atau menambah entri cron yang baru, perlu dilakukan SSH ke server.
 
 Laravel menyediakan pendekatan dalam mengelola tugas-tugas terjadwal. Command scheduler milik Laravel memungkinkan penentuan jadwal command dalam aplikasi Laravel. Penggunaan scheduler ini hanya memerlukan satu entri cron dalam Server. Jadwal tugas didefinisikan dalam method **schedule** milik file **app/Console/Kernel.php**
 
 ## Konsep-konsep
 
-Semua tugas yang terjadwal dapat didefinisikan dalam method **schedule** dari class **App\Console\Kernel**.
+Semua tugas yang terjadwal maupun akan dijadwalkan dapat didefinisikan dalam method **schedule** dari class **App\Console\Kernel**.
+```php
+<?php
+
+namespace App\Console;
+
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+
+class Kernel extends ConsoleKernel
+{
+    /**
+     * Define the application's command schedule.
+     *
+     * @param  \Illuminate\Console\Scheduling\Schedule  $schedule
+     * @return void
+     */
+    protected function schedule(Schedule $schedule)
+    {
+        // $schedule->command('inspire')->hourly();
+    }
+ ```
+
+Terdapat beberapa cara untuk melakukan penjadwalan pada Scheduler yaitu dengan: 
+1. Menggunakan callable/closure
+2. Memanggil artisan command
+3. Memanggil job
+4. Mengeksekusi shell command
 
 Di bawah ini terdapat beberapa contoh penerapan method **schedule** dalam Laravel.
 
-### Mendefinisikan Schedule
+### Mendefinisikan Schedule dengan Callable/Closure
 
-Dalam contoh ini akan dijadwalkan closure tiap tengah malam. Dalam closure ini akan dieksekusi query database untuk membersihkan sebuah tabel.
+Dalam contoh ini akan dijadwalkan closure tiap tengah malam. Dalam closure ini akan dieksekusi query database untuk membersihkan sebuah tabel. Cara untuk memanggil callable yang ada yaitu: 
+```php
+        $schedule->call(function () {
+            DB::table('nama_tabel')->delete();
+        })->daily();
+```
+
+Pada contoh di atas, dia akan memanggil sebuah fungsi untuk menghapus data pada tabel yang dispesifikkan pada sebuah database. Setelah melakukan callable, yang dapat dilakukan adalah mendefiniskan frekuensi tugas ini akan dijadwalkan, yang dapat dilihat di bawah. Dengan memanggil ->daily(), berarti fungsi akan berjalan setiap hari pada tengah malam. 
+
+Contoh lengkap: 
 
 ```php
 namespace App\Console;
@@ -54,8 +90,10 @@ Artisan command **schedule:list** dapat digunakan untuk melihat semua tugas yang
 php artisan schedule:list
 ```
 
-#### Schedule Artisan Command
+#### Mendefinisikan Schedule dengan Artisan Command
+Pendefinisian schedule dengan artisan command menjadi pendekatan yang lebih disukai daripada pendekatan Closure karena memberikan organisasi kode yang lebih baik dan reusability pada saat yang sama.
 
+Berikut adalah contoh penggunaan artisan command yang tertera pada dokumentasi Laravel:
 ```php
 use App\Console\Commands\SendEmailsCommand;
 
@@ -64,7 +102,23 @@ $schedule->command('emails:send Taylor --force')->daily();
 $schedule->command(SendEmailsCommand::class, ['Taylor', '--force'])->daily();
 ```
 
+Struktur dari pemanggilan command untuk dijadwalkan pada Scheduler mirip dengan Closure, akan tetapi menggunakan syntax `->command()`, dan command akan didefinisi di dalam mirip seperti pemanggilan command pada terminal. Jangan lupa, definisikan juga frekuensi penjadwalan tugas. 
+
+Untuk contoh implementasi sederhana yang dapat digunakan yaitu seperti yang telah disediakan oleh Laravel sebelumnya. 
+```
+$schedule->command('inspire')->hourly();
+```
+
+Tugas yang dilakukan pada command di atas yaitu mengeluarkan output kalimat-kalimat memotivasi secara random setiap jamnya. Untuk mengecek command-command yand dimiliki, dapat mengecek pada terminal:
+
+```php 
+php artisan list
+```
+Selain itu, kita juga dapat membuat command-command sendiri sesuai yang kita butuhkan. Akan dijelaskan suatu implementasi berupa mengirim email di bagian bawah. 
+
+
 #### Schedule Queued Jobs
+Contoh yang lain yaitu dengan menjadwalkan Queued Job seperti berikut:
 
 ```php
 use App\Jobs\Heartbeat;
@@ -79,7 +133,9 @@ use App\Jobs\Heartbeat;
 $schedule->job(new Heartbeat, 'heartbeats', 'sqs')->everyFiveMinutes();
 ```
 
+
 #### Schedule Shell Command
+Selain itu, Laravel juga memungkinkan Anda untuk menjadwalkan perintah shell sehingga Anda dapat menjalankan aplikasi eksternal juga. 
 
 ```php
 $schedule->exec('node /home/forge/script.js')->daily();
@@ -87,7 +143,7 @@ $schedule->exec('node /home/forge/script.js')->daily();
 
 ### Schedule Frequency Option
 
-Terdapat banyak frekuensi task schedule yang bisa diberikan kepada sebuah tugas.
+Terdapat banyak frekuensi task schedule yang bisa diberikan kepada sebuah tugas. S
 
 | Method                            | Description                                                   |
 | --------------------------------- | ------------------------------------------------------------- |
@@ -269,6 +325,7 @@ $schedule->command('emails:send')->evenInMaintenanceMode();
 ```
 
 ## Menjalankan Scheduler
+### Menjalankan Scheduler Pada Server
 
 Artisan command **schedule:run** dapat digunakan untuk mengevaluasi semua tugas terjadwal dan menentukan apakah tugas tersebut perlu dijalankan sesuai waktu milik server.
 
@@ -279,16 +336,16 @@ Ketika menjalankan Laravel Scheduler, diperlukan satu entri konfigurasi cron pad
 ```
 
 ### Menjalankan Scheduler Secara Lokal
-
-Command **schedule:work** dapat digunakan untuk menjalankan scheduler tiap menit sampai command dihentikan (terminate).
-
-```
+Dikarenakan untuk saat ini, kita lebih sering akan menjalankan run secara lokal, maka command yang dapat digunakan yaitu: 
+```php 
 php artisan schedule:work
 ```
+Command ini dapat digunakan untuk menjalankan scheduler tiap menit sampai command dihentikan (terminate). Jadi apabila command ini tidak kita jalankan, scheduler kita tidak akan berjalan dengan sendirinya. 
+
 
 ## Task Output
 
-Laravel Scheduler menyediakan beberapa **method** untuk bekerja dengan output yang dibuat oleh tugas terjadwal.
+Laravel Scheduler menyediakan beberapa **method** untuk bekerja dengan output yang dibuat oleh tugas terjadwal. Metode-metode ini bermanfaat apabila kita akan melakukan running tugas-tugas yang banyak dan ingin mendapatkan log-log dari scheduler yang sudah kita lakukan. 
 
 Method **sendOutputTo** dapat mengirimkan output ke sebuah file.
 
@@ -399,3 +456,6 @@ Ping method memerlukan library Guzzle HTTP.
 ```
 composer require guzzlehttp/guzzle
 ```
+
+
+
