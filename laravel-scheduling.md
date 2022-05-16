@@ -458,4 +458,210 @@ composer require guzzlehttp/guzzle
 ```
 
 
+## Implementasi Laravel Scheduler untuk Mengirimkan Email
+Dalam aplikasi ini, kita akan mengirim satu email ke pemilik yang memberi tahu kita jumlah pengguna yang terdaftar hari ini. 
+
+
+### Langkah Pertama: Membuat Command
+Command di bawah dapat dirun pada terminal. 
+```php 
+php artisan make:command RegisteredUsers --command=registered:users
+```
+
+Command tersebut akan membuat sebuah class baru bernama RegisteredUsers pada file dengan nama yang sama di `app/Console/Commands` folder. 
+
+Kemudian pada file `RegisteredUsers.php` tersebut dapat diganti description (yang akan muncul pada list command) dan juga fungsi `handle()`, yang akan mengeksekusi command yang telah kita definisikan kerjanya. 
+```php
+   /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Send an email of registered users';
+```
+
+```php
+ /**
+     * Execute the console command.
+     *
+     * @return mixed
+     */
+    public function handle()
+    {
+        $totalUsers = \DB::table('users')
+                  ->whereRaw('Date(created_at) = CURDATE()')
+                  ->count();
+    }
+```
+
+Dikarenakan command ini akan digunakan dalam Scheduler kita, maka kita harus mendaftarkan command pada file Kernel. 
+```php
+ /**
+     * The Artisan commands provided by your application.
+     *
+     * @var array
+     */
+    protected $commands = [
+        'App\Console\Commands\RegisteredUsers',
+    ];
+```
+
+### Langkah Kedua: Membuat Mailable Class 
+Pada terminal, run command di bawah: 
+```php
+php artisan make:mail SendMailable
+```
+
+Kemudian, kita dapat mendefinisikan apa yang akan dikirim pada email tersebut. 
+```php
+<?php
+
+namespace App\Mail;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class SendMailable extends Mailable
+{
+    use Queueable, SerializesModels;
+    public $count;
+
+    /**
+     * Create a new message instance.
+     *
+     * @return void
+     */
+    public function __construct($count)
+    {
+        $this->count = $count;
+    }
+
+    /**
+     * Build the message.
+     *
+     * @return $this
+     */
+    public function build()
+    {
+        return $this->view('emails.registeredcount');
+    }
+}
+```
+Selain itu, kita juga harus mendefinisikan view yang akan digunakan sebagai template pada `resources  >>  views  >> emails  >>  registeredcount.blade.php`
+
+```php
+<div>
+    Total number of registered users for today is: {{ $count }}
+</div>
+```
+
+Kemudian tambahkan class Mailable pada file `RegisteredUsers.php`:
+
+```php
+// RegisteredUsers.php
+
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\SendMailable;
+
+class RegisteredUsers extends Command
+{
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'registered:users';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Send an email of registered users';
+
+    /**
+     * Create a new command instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+    }
+
+    /**
+     * Execute the console command.
+     *
+     * @return mixed
+     */
+    public function handle()
+    {
+        $totalUsers = \DB::table('users')
+                  ->whereRaw('Date(created_at) = CURDATE()')
+                  ->count();
+        Mail::to('email yang ingin dikirim')->send(new SendMailable($totalUsers));
+    }
+}
+```
+
+Untuk mengirim email pada contoh ini, menggunakan <a href="https://mailtrap.io/">Mailtrap</a>. 
+
+#### Konfigurasi Mailtrap
+Setelah melakukan sign up pada Mailtrap, Mailtrap akan menyediakan details seperti berikut: 
+```
+Host:	smtp.mailtrap.io
+Port:	25 or 465 or 2525
+Username:	// some username
+Password:	// some password
+Auth:	PLAIN, LOGIN and CRAM-MD5
+TLS:	Optional
+```
+
+Details ini dapat kita gunakan inside file `.env` kita. 
+```
+MAIL_DRIVER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME= // some username
+MAIL_PASSWORD= // some password
+MAIL_ENCRYPTION=null
+```
+
+### Langkah Ketiga: Mendefinisikan Command pada Task Scheduler
+```php
+protected function schedule(Schedule $schedule)
+{
+    $schedule->command('registered:users')
+        ->daily();
+}
+```
+
+Dan kemudian untuk melakukan run dapat menggunakan
+```php
+php artisan schedule:work
+```
+
+Yang harus diingat dari penggunaan Mailtrap ini sendiri, email tidak akan terkirim secara aktual ke email yang telah didefinisikan pada class Mailable, akan tetapi pada dashboard Mailtrap, akan ada tulisan/bukti bahwa email dapat terkirim. Mailtrap sendiri adalah sebuah testing tool dan tidak didesain untuk mengirimkan email ke email-email aktual. 
+
+Apabila ingin mengirim email secara aktual, dapat menggunakan external tool lain yang ada. 
+
+
+
+
+
+
+
+
+
+
+
+
+
 
